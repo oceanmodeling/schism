@@ -484,10 +484,13 @@ module schism_glbl
                                   &etaic(:),diffmax(:),diffmin(:),dfq1(:,:),dfq2(:,:)
   real(rkind),save,allocatable,target :: rsxx(:), rsxy(:), rsyy(:)
 
+
   !(2,npa). ocean-ice stress (junk if no ice) [m^2/s/s]
   real(rkind),save,allocatable :: tau_oi(:,:)
   !(npa). freshwater flux due to ice melting [kg/s/m/m]. >0: precip; <0: evap
   real(rkind),save,allocatable :: fresh_wa_flux(:)
+  !(npa). salinity flux due to ice melting/growth [psu/s].:
+  real(rkind),save,allocatable ::salinity_flux(:)
   !(npa). net heat flux into the ocean surface [W/m/m]. >0: warm the ocean
   real(rkind),save,allocatable :: net_heat_flux(:)
   real(rkind),save,allocatable :: wind_rotate_angle(:) !in radians
@@ -496,6 +499,26 @@ module schism_glbl
   !(npa). evap water flux in ice model [kg/s/m/m]. 
   real(rkind),save,allocatable :: ice_evap(:)
   real(rkind),save,allocatable :: srad_o(:)
+  real(rkind),save,allocatable :: sflux_o(:)
+  real(rkind),save,allocatable :: aice(:)
+  
+  !>---------------------------------------------------
+  !         Creating vars to dump cice fields to
+  !>---------------------------------------------------
+  real(rkind), allocatable, save, target :: uvice(:)
+  real(rkind), allocatable, save, target :: vvice(:)
+  real(rkind), allocatable, save, target :: taux(:)
+  real(rkind), allocatable, save, target :: tauy(:)
+  real(rkind), allocatable, save, target :: vsno(:)
+  real(rkind), allocatable, save, target :: vice(:)
+  real(rkind), allocatable, save, target :: ifresh_flux(:)
+  real(rkind), allocatable, save, target :: isalt_flux(:)
+  real(rkind), allocatable, save, target :: iheat_flux(:)
+  real(rkind), allocatable, save, target :: isw_pen(:)
+  real(rkind), allocatable, save, target :: frzmlt(:)
+  real(rkind), allocatable, save, target :: CdnIO(:) 
+  !
+
   logical,save,allocatable :: lhas_ice(:)
   logical,save :: lice_free_gb
 

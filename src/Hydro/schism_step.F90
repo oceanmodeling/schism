@@ -79,6 +79,7 @@
       USE harm
 #endif
 
+
 #ifdef USE_MICE
       use gen_modules_clock
       use icedrv_main, only:io_icepack,restart_icepack,step_icepack
@@ -174,6 +175,15 @@
 !Tsinghua group: 0821...
       real(rkind) :: dtrdz,apTpxy_up,apTpxy_do,epsffs,epsfbot !8022 +epsffs,epsfbot
 !0821...
+
+!Joseph C. Smith added variables for tau_oi stress.
+
+real (rkind), parameter  :: rhowat= 1025.0            ! Water density
+real (rkind), parameter  :: Cdocn = 0.00536       ! Ice-ocean drag coef
+real (rkind) :: aux   ! ustar
+
+!end Joseph C. Smith
+
 
 !     Output handles
       character(len=72) :: it_char
@@ -536,7 +546,11 @@
             !Assume all vars in sflux*.nc are available from atmos model or read in from atmos.nc,
             !and this routine compute other fluxes
 #ifdef USE_ATMOS
-            airt2=airt2-273.15d0 !Conv K to C, ESMF send with unit K
+            !airt2=airt2-273.15d0 !Conv K to C, ESMF send with unit K
+            do i=1,npa
+                !ESMF only update within range np NOT npa by ele-itp, therefore some airt2 are still init value (C)
+                if (airt2(i)>100.d0) airt2(i)=airt2(i)-273.15d0 !Conv K to C, ESMF send with unit K
+            end do
 #endif
             call surf_fluxes2 (wtime2,windx2,windy2,pr2,airt2, &
      &shum2,srad,fluxsu,fluxlu,hradu,hradd,tauxz,tauyz, &
@@ -981,6 +995,99 @@
       endif !icou_elfe_wwm
 #endif
 !$OMP end parallel
+
+
+!$OMP   do
+  !>--------------------------------------------------------
+  !>              Imported values from CICE
+  !> CICE-UFS coupling importing variables (Using MICE vars)
+  !>--------------------------------------------------------
+
+  do i = 1,npa
+    if (aice(i) > real(0.0)) then
+      !>-------------------------------------------------
+      !>Ice ocean stress
+      !>tau_oi is in units of [N/m/m] (1=x, 2=y)
+      !>Weighted by ice area on T-grid (CICE)
+      !>Is there a better choice for Cdn_ocn? How is it calculated in CICE?
+      !>-------------------------------------------------
+        
+        !> Calculate the ice-ocean drag coeff the same way as ice pack:
+        !> 
+
+        aux = sqrt((uvice(i)-uu2(nvrt,i))**2 + (vvice(i)-vv2(nvrt,i))**2 )*CdnIO(i)
+
+        tau_oi(1,i) = aux*(uvice(i) - uu2(nvrt,i)) 
+        tau_oi(2,i) = aux*(vvice(i) - vv2(nvrt,i))
+
+        tau(1,i)   = (1-aice(i))*tau(1,i) + aice(i)*tau_oi(1,i) 
+        tau(2,i)   = (1-aice(i))*tau(2,i) + aice(i)*tau_oi(2,i)
+
+      !>-------------------------------------------------
+      !>Fresh water flux 
+      !> fresh_wa_fluxs is in units of [kg/s/m/m]
+      !> Water is distributed across whole element
+      !>-------------------------------------------------
+
+        fluxprc(i) = (1-aice(i))*fluxprc(i) + aice(i)*fresh_wa_flux(i)!*real(0.5)
+
+      !>-------------------------------------------------
+      !>Heat flux ice to ocean 
+      !> net_heat_flux is in units of [W/m/m]
+      !> Energy is distributed across whole element
+      !>-------------------------------------------------
+
+        sflux(i)   =  (1-aice(i))*sflux(i) + aice(i)*net_heat_flux(i)
+
+      !>-------------------------------------------------
+      !>Short-wave pen. flux
+      !>srad_th_ice is in units of [W/m/m]
+      !>Weighted by ice area
+      !>------------------------------------------------
+         
+         srad(i)   =   (1-aice(i))*srad_o(i) + aice(i)*srad_th_ice(i)
+      
+      !>-------------------------------------------------
+      !> Salinity flux 
+      !> salinity_flux is in units of [psu/s]
+      !> salinity is distributed across whole element
+      !>-------------------------------------------------
+      !  tr_el(2,nvrt,i)  = tr_el(2,nvrt,i)  + salinity_flux(i)*dt
+      !  tr_nd(2,nvrt,i)  = tr_nd(2,nvrt,i)  + salinity_flux(i)*dt
+      !  tr_nd0(2,nvrt,i) = tr_nd0(2,nvrt,i) + salinity_flux(i)*dt
+ 
+    end if
+  end do
+!$OMP   end do
+!   write(12,*)'Max ice-ocean stress, tauiox, tauioy, tauaox, tauaoy: ',max(abs(tau(1,:))), max(abs(tau(2,:))), max(abs(tau_oi(1,:))), max(abs(tau_oi(2,:)))
+!   write(12,*)'Max ice-ocean salinity flux, fluxprc, resh_wa_fluxs : ',max(abs(fluxprc(:))) , max(abs(fresh_wa_fluxs(:)))
+!   write(12,*)'Max ice-ocean heat flux, sflux, net_heat_flux       : ',max(abs(sflux(:)))   , max(abs(net_heat_flux(:)))
+!   write(12,*)'Max ice-ocean sw flux, srad_o, srad_th_ice          : ',max(abs(srad_o(:)))  , max(abs(srad_th_ice(:)))
+
+
+
+  !>--------------------------------------------------------
+  !>              Finished CICE import
+  !>--------------------------------------------------------
+
+
+
+ do i=1,nea
+    do k=1,nvrt
+      tf = -0.0543*tr_el(2,k,i)
+      if(tr_el(1,k,i)<tf) tr_el(1,k,i)=tf         !reset temp. below freezing temp.  
+    enddo
+ enddo
+
+ do i=1,npa
+     do k=1,nvrt
+       tf = -0.0543*tr_nd(2,k,i)
+       if(tr_nd(1,k,i)<tf) tr_nd(1,k,i)=tf         !reset temp. below freezing temp.
+       tf = -0.0543*tr_nd0(2,k,i)
+       if(tr_nd0(1,k,i)<tf) tr_nd0(1,k,i)=tf         !reset temp. below freezing temp.
+     enddo
+  enddo
+
 
 #ifdef USE_MICE
       !Exchange variables btw hydro and ice:
@@ -6438,7 +6545,21 @@
 
 !$OMP workshare
       deta2_dx=0.d0; deta2_dy=0.d0; deta1_dx=0.d0; deta1_dy=0.d0; dpr_dx=0.d0; dpr_dy=0.d0; detp_dx=0.d0; detp_dy=0.d0
+      deta1_dxy_elem=0.d0
 !$OMP end workshare
+
+!     Pressure gradient at elem for CICE
+!$OMP do
+      do ie=1,nea
+        if(idry_e(ie)==0) then
+          do m=1,i34(ie)
+            nd=elnode(m,ie)
+            deta1_dxy_elem(ie,1)=deta1_dxy_elem(ie,1)+eta1(nd)*dldxy(m,1,ie) !eframe if ics=2
+            deta1_dxy_elem(ie,2)=deta1_dxy_elem(ie,2)+eta1(nd)*dldxy(m,2,ie) !eframe if ics=2
+          enddo !m
+        endif !idry_e
+      enddo !ie
+!$OMP end do
 
 !$OMP do 
       do j=1,ns !resident
