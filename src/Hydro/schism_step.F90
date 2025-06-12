@@ -998,6 +998,9 @@ real (rkind) :: aux   ! ustar
 
 
 !$OMP   do
+
+
+#ifdef CICE_COUPLING_COASTAL
   !>--------------------------------------------------------
   !>              Imported values from CICE
   !> CICE-UFS coupling importing variables (Using MICE vars)
@@ -1088,6 +1091,7 @@ real (rkind) :: aux   ! ustar
      enddo
   enddo
 
+#endif /*CICE_COUPLING_COASTAL*/
 
 #ifdef USE_MICE
       !Exchange variables btw hydro and ice:
