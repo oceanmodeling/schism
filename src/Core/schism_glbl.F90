@@ -484,7 +484,6 @@ module schism_glbl
                                   &etaic(:),diffmax(:),diffmin(:),dfq1(:,:),dfq2(:,:)
   real(rkind),save,allocatable,target :: rsxx(:), rsxy(:), rsyy(:)
 
-
   !(2,npa). ocean-ice stress (junk if no ice) [m^2/s/s]
   real(rkind),save,allocatable :: tau_oi(:,:)
   !(npa). freshwater flux due to ice melting [kg/s/m/m]. >0: precip; <0: evap

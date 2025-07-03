@@ -79,7 +79,6 @@
       USE harm
 #endif
 
-
 #ifdef USE_MICE
       use gen_modules_clock
       use icedrv_main, only:io_icepack,restart_icepack,step_icepack
@@ -176,14 +175,9 @@
       real(rkind) :: dtrdz,apTpxy_up,apTpxy_do,epsffs,epsfbot !8022 +epsffs,epsfbot
 !0821...
 
-!Joseph C. Smith added variables for tau_oi stress.
-
-real (rkind), parameter  :: rhowat= 1025.0            ! Water density
+real (rkind), parameter  :: rhowat= 1025.0        ! Water density
 real (rkind), parameter  :: Cdocn = 0.00536       ! Ice-ocean drag coef
-real (rkind) :: aux   ! ustar
-
-!end Joseph C. Smith
-
+real (rkind) :: aux                               ! ustar
 
 !     Output handles
       character(len=72) :: it_char
@@ -996,11 +990,9 @@ real (rkind) :: aux   ! ustar
 #endif
 !$OMP end parallel
 
-
 !$OMP   do
-
-
 #ifdef USE_CICE
+
   !>--------------------------------------------------------
   !>              Imported values from CICE
   !> CICE-UFS coupling importing variables (Using MICE vars)
@@ -1062,10 +1054,10 @@ real (rkind) :: aux   ! ustar
     end if
   end do
 !$OMP   end do
-!   write(12,*)'Max ice-ocean stress, tauiox, tauioy, tauaox, tauaoy: ',max(abs(tau(1,:))), max(abs(tau(2,:))), max(abs(tau_oi(1,:))), max(abs(tau_oi(2,:)))
-!   write(12,*)'Max ice-ocean salinity flux, fluxprc, resh_wa_fluxs : ',max(abs(fluxprc(:))) , max(abs(fresh_wa_fluxs(:)))
-!   write(12,*)'Max ice-ocean heat flux, sflux, net_heat_flux       : ',max(abs(sflux(:)))   , max(abs(net_heat_flux(:)))
-!   write(12,*)'Max ice-ocean sw flux, srad_o, srad_th_ice          : ',max(abs(srad_o(:)))  , max(abs(srad_th_ice(:)))
+!   write(12,*)'Max ice-ocean stress, tauiox, tauioy, tauaox, tauaoy: ',maxval(abs(tau(1,:))), maxval(abs(tau(2,:))), maxval(abs(tau_oi(1,:))), maxval(abs(tau_oi(2,:)))
+!   write(12,*)'Max ice-ocean salinity flux, fluxprc, resh_wa_fluxs : ',maxval(abs(fluxprc(:))) , maxval(abs(fresh_wa_fluxs(:)))
+!   write(12,*)'Max ice-ocean heat flux, sflux, net_heat_flux       : ',maxval(abs(sflux(:)))   , maxval(abs(net_heat_flux(:)))
+!   write(12,*)'Max ice-ocean sw flux, srad_o, srad_th_ice          : ',maxval(abs(srad_o(:)))  , maxval(abs(srad_th_ice(:)))
 
 
 

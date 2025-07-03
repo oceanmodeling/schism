@@ -1419,7 +1419,7 @@
          &  veg_h(npa),veg_nv(npa),veg_di(npa),veg_cd(npa), &
          &  veg_h_unbent(npa),veg_nv_unbent(npa),veg_di_unbent(npa), &
          &  wwave_force(2,nvrt,nsa),btaun(npa), &
-         &  rsxx(npa),rsxy(npa),rsyy(npa),deta1_dxy_elem(nea,2),stat=istat)
+         &  rsxx(npa), rsxy(npa), rsyy(npa), deta1_dxy_elem(nea,2), stat=istat)
       if(istat/=0) call parallel_abort('INIT: other allocation failure')
 
 !     Tracers
@@ -1681,7 +1681,6 @@
        allocate(kk_fib(nea,2),sink_fib(nea),fraction_fib(nea))
        allocate(sink0(npa),fraction0(npa),kk10(npa),kk20(npa))
 #endif
-
       allocate(aice(npa),tau_oi(2,npa),fresh_wa_flux(npa),salinity_flux(npa),net_heat_flux(npa), &
                srad_o(npa),srad_th_ice(npa),stat=istat)
       if(istat/=0) call parallel_abort('INIT: ice frac allocation failure')
