@@ -1419,7 +1419,7 @@
          &  veg_h(npa),veg_nv(npa),veg_di(npa),veg_cd(npa), &
          &  veg_h_unbent(npa),veg_nv_unbent(npa),veg_di_unbent(npa), &
          &  wwave_force(2,nvrt,nsa),btaun(npa), &
-         &  rsxx(npa), rsxy(npa), rsyy(npa), stat=istat)
+         &  rsxx(npa), rsxy(npa), rsyy(npa), deta1_dxy_elem(nea,2), stat=istat)
       if(istat/=0) call parallel_abort('INIT: other allocation failure')
 
 !     Tracers
@@ -1681,6 +1681,20 @@
        allocate(kk_fib(nea,2),sink_fib(nea),fraction_fib(nea))
        allocate(sink0(npa),fraction0(npa),kk10(npa),kk20(npa))
 #endif
+      allocate(aice(npa),tau_oi(2,npa),fresh_wa_flux(npa),salinity_flux(npa),net_heat_flux(npa), &
+               srad_o(npa),srad_th_ice(npa),stat=istat)
+      if(istat/=0) call parallel_abort('INIT: ice frac allocation failure')
+      aice(:)          = real(0)
+      tau_oi(:,:)      = real(0)
+      fresh_wa_flux(:) = real(0)
+      salinity_flux(:) = real(0)
+      net_heat_flux(:) = real(0)
+      srad_o(:)        = real(0)
+      srad_th_ice(:)   = real(0)
+
+
+       allocate(sflux_o(npa),stat=istat)
+       sflux_o(:)     = real(0)
 
 #ifdef USE_MICE
         allocate(tau_oi(2,npa),fresh_wa_flux(npa),net_heat_flux(npa), &
@@ -1752,6 +1766,7 @@
       wind_rotate_angle=0.d0
       wwave_force=0.d0
       diffmin=1.d-6; diffmax=1.d0
+      deta1_dxy_elem=0.d0
 
 !Tsinghua group
 #ifdef USE_SED 
