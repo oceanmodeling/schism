@@ -1003,12 +1003,7 @@ real (rkind) :: aux                               ! ustar
       !>-------------------------------------------------
       !>Ice ocean stress
       !>tau_oi is in units of [N/m/m] (1=x, 2=y)
-      !>Weighted by ice area on T-grid (CICE)
-      !>Is there a better choice for Cdn_ocn? How is it calculated in CICE?
       !>-------------------------------------------------
-        
-        !> Calculate the ice-ocean drag coeff the same way as ice pack:
-        !> 
 
         aux = sqrt((uvice(i)-uu2(nvrt,i))**2 + (vvice(i)-vv2(nvrt,i))**2 )*CdnIO(i)
 
@@ -1021,7 +1016,6 @@ real (rkind) :: aux                               ! ustar
       !>-------------------------------------------------
       !>Fresh water flux 
       !> fresh_wa_fluxs is in units of [kg/s/m/m]
-      !> Water is distributed across whole element
       !>-------------------------------------------------
 
         fluxprc(i) = (1-aice(i))*fluxprc(i) + aice(i)*fresh_wa_flux(i)!*real(0.5)
@@ -1029,7 +1023,6 @@ real (rkind) :: aux                               ! ustar
       !>-------------------------------------------------
       !>Heat flux ice to ocean 
       !> net_heat_flux is in units of [W/m/m]
-      !> Energy is distributed across whole element
       !>-------------------------------------------------
 
         sflux(i)   =  (1-aice(i))*sflux(i) + aice(i)*net_heat_flux(i)
@@ -1037,35 +1030,13 @@ real (rkind) :: aux                               ! ustar
       !>-------------------------------------------------
       !>Short-wave pen. flux
       !>srad_th_ice is in units of [W/m/m]
-      !>Weighted by ice area
       !>------------------------------------------------
          
          srad(i)   =   (1-aice(i))*srad_o(i) + aice(i)*srad_th_ice(i)
-      
-      !>-------------------------------------------------
-      !> Salinity flux 
-      !> salinity_flux is in units of [psu/s]
-      !> salinity is distributed across whole element
-      !>-------------------------------------------------
-      !  tr_el(2,nvrt,i)  = tr_el(2,nvrt,i)  + salinity_flux(i)*dt
-      !  tr_nd(2,nvrt,i)  = tr_nd(2,nvrt,i)  + salinity_flux(i)*dt
-      !  tr_nd0(2,nvrt,i) = tr_nd0(2,nvrt,i) + salinity_flux(i)*dt
  
     end if
   end do
 !$OMP   end do
-!   write(12,*)'Max ice-ocean stress, tauiox, tauioy, tauaox, tauaoy: ',maxval(abs(tau(1,:))), maxval(abs(tau(2,:))), maxval(abs(tau_oi(1,:))), maxval(abs(tau_oi(2,:)))
-!   write(12,*)'Max ice-ocean salinity flux, fluxprc, resh_wa_fluxs : ',maxval(abs(fluxprc(:))) , maxval(abs(fresh_wa_fluxs(:)))
-!   write(12,*)'Max ice-ocean heat flux, sflux, net_heat_flux       : ',maxval(abs(sflux(:)))   , maxval(abs(net_heat_flux(:)))
-!   write(12,*)'Max ice-ocean sw flux, srad_o, srad_th_ice          : ',maxval(abs(srad_o(:)))  , maxval(abs(srad_th_ice(:)))
-
-
-
-  !>--------------------------------------------------------
-  !>              Finished CICE import
-  !>--------------------------------------------------------
-
-
 
  do i=1,nea
     do k=1,nvrt
@@ -1083,6 +1054,9 @@ real (rkind) :: aux                               ! ustar
      enddo
   enddo
 
+  !>--------------------------------------------------------
+  !>              Finished CICE import
+  !>--------------------------------------------------------
 #endif /*USE_CICE*/
 
 #ifdef USE_MICE
