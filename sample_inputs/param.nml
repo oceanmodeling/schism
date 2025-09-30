@@ -35,6 +35,9 @@
 
 ! # of vertical bins in vegetation module (used only if iveg/=0)
   nbins_veg_vert = 2
+  
+! # of marsh types (used only if USE_MARSH)
+  nmarsh_types = 2
 
 ! Global output controls
   nspool = 36 !output step spool
@@ -45,11 +48,6 @@
 !+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
 ! Optional parameters. The values shown below are default unless otherwise noted
 !+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
-!-----------------------------------------------------------------------
-! Optional offline partitioning using NO_PARMETIS. If on, need partition.prop (like global_to_local.prop).
-!-----------------------------------------------------------------------
-
-
 !-----------------------------------------------------------------------
 ! 2nd pre-proc flag. If ipre2/=0, code will output some diagnotic outputs and stop.
 ! These outputs are: drag coefficients (Cdp)
@@ -124,7 +122,6 @@
 ! Main ramp option
 !-----------------------------------------------------------------------
   dramp = 1. !ramp-up period in days for b.c. etc (no ramp-up if <=0)
-
   drampbc = 0. !ramp-up period in days for baroclinic force
 
 !-----------------------------------------------------------------------
@@ -246,37 +243,8 @@
   sfea0 = 45 !lat
 
 !-----------------------------------------------------------------------
-! Option to deal with under resolution near steep slopes in deeper depths
-! 0: use h[12,_bcc below; /=0: use hw_* below
-!-----------------------------------------------------------------------
-  iunder_deep = 0 
-
-!-----------------------------------------------------------------------
-! Baroclinicity calculation in off/nearshore with iunder_deep=ibc=0. 
-! The 'below-bottom' gradient
-! is zeroed out if h>=h2_bcc (i.e. like Z) or uses const extrap
-! (i.e. like terrain-following) if h<=h1_bcc(<h2_bcc) (and linear
-! transition in between based on local depth)
-!-----------------------------------------------------------------------
-  h1_bcc = 50. ![m]
-  h2_bcc = 100. ![m]; >h1_bcc
-
-!-----------------------------------------------------------------------
-! Hannah-Wright-like ratio & depth used to account for under-resolution
-! in a b-clinic model. Used only if ibc=0 and iunder_deep/=0.
-! The b-clinic force at prism centers is calculated with a reconstruction
-! method in horizontal that has a stencil of an element and its adjacent elements.
-! If the depths change is too much between the elem and its adjacent elem
-! the under-resolution occurs (with steep bottom slope) and b-clinic force
-! needs to be zeroed out below the (higher) bottom, specifically, if
-! max(2 depths)>=hw_depth and abs(diff(2 depths))>=hw_ratio*max(2 depths).
-!-----------------------------------------------------------------------
-  hw_depth = 1.e6 !threshold depth in [m]
-  hw_ratio = 0.5 !ratio
-
-!-----------------------------------------------------------------------
 ! Hydraulic model option. If ihydraulics/=0, hydraulics.in 
-! is required. This option cannot be used with non-hydrostatic model.
+! is required. 
 !-----------------------------------------------------------------------
   ihydraulics = 0
 
@@ -291,7 +259,7 @@
 ! than once, and the code will accumulate the volumes; for mass conc, 
 ! values are applied at _net_ source elem (no summation for conc).
 
-! If USE_NWM_BMI is on with if_source/=0, some parts of the reading and some b.c. will be bypassed (but the inputs
+! If USE_BMI is on with if_source/=0, some parts of the reading and some b.c. will be bypassed (but the inputs
 ! will still be needed).
 !-----------------------------------------------------------------------
   if_source = 0
@@ -367,7 +335,7 @@
 
 !-----------------------------------------------------------------------
 ! Elevation boundary condition ramp-up flag. =0: ramp up from 0; =1: ramp up from
-! elev. values read in from elev.ic or hotstart.nc - if neither is present, from 0.
+! elev values read in from elev.ic or hotstart.nc - if neither is present, from 0.
 ! This flag is mainly used to start the simulation from non-zero elev.
 ! The ramp-up period is 'dramp' (so if dramp=0, full strength is applied).
 !-----------------------------------------------------------------------
@@ -401,7 +369,7 @@
 !  flag_ic(4) = 1 !Age i.c. flag set inside code
   flag_ic(5) = 1 !SED3D
   flag_ic(6) = 1 !EcoSim
-  flag_ic(7) = 1 !ICM
+  flag_ic(7) = 0 !ICM
   flag_ic(8) = 1 !CoSINE
   flag_ic(9) = 1 !FIB
   flag_ic(10) = 1 !TIMOR
@@ -439,12 +407,6 @@
 ! Suggested value: btrack_nudge=9.013e-3
 !-----------------------------------------------------------------------
   btrack_nudge= 9.013e-3 
-
-!-----------------------------------------------------------------------
-! Behavior when trajectory hits open bnd. If ibtrack_openbnd=0, slide with
-! tangential vel; otherwise, stop and exit btrack 
-!-----------------------------------------------------------------------
-!  ibtrack_openbnd = 1 !hardwired
 
 !-----------------------------------------------------------------------
 ! Wetting and drying. 
@@ -531,8 +493,9 @@
                       !      This is mainly for the convenience of visualization.
   epsilon2 = 1.e-10   !used when i_epsilon2 = 1
                       !spatially uniform coefficient of 3rd-order weno smoother
-                      !(larger values are more prone to numerical dispersion,
-                      ! 1.e-10 should be fairly safe, recommended values: 1.e-8 ~ 1.e-6)
+                      !(Larger values, e.g., 1e-5, better preserve fine features but can increase numerical dispersion.
+                      ! Smaller values, e.g., 1e-10, make the scheme more dissipative and potentially smearing sharp filaments. 
+                      ! 1.e-10 should be fairly safe in preventing oscillations, recommended values: 1.e-8 ~ 1.e-6)
   i_prtnftl_weno = 0 !option for writing nonfatal errors on invalid temp. or salinity for density: (0) off; (1) on.
 
   !Inactive at the moment:
@@ -562,7 +525,7 @@
 ! In all cases, if USE_ICE the stress in ice-covered portion is calculated by ICE routine.
 !-----------------------------------------------------------------------
   nws = 0 
-  wtiminc = 150. !time step for atmos. forcing. Default: same as dt
+  wtiminc = 150. !time step (sec) for atmos. forcing. Default: same as dt
   drampwind = 1. !ramp-up period in days for wind (no ramp-up if <=0)
   iwindoff = 0 !needed only if nws/=0; '1': needs windfactor.gr3
   iwind_form = 1 !needed if nws/=0
@@ -570,39 +533,31 @@
 
 !-----------------------------------------------------------------------
 ! Heat and salt exchange using Zeng's (default) or Fairall (USE_BULK_FAIRALL) scheme.
-! isconsv=1 needs ihconsv=1; ihconsv=1 needs nws=2.
-! If isconsv=1, need to compile with precip/evap module turned on.
-! If at least one of ihconsv and isconsv is set to 1,
-! locally turning off air-sea exchange in shallow waters (<0.25 m) is recommended.
-! Options for locally turning off heat/salt exchange are specified by
-! i_hmin_airsea_ex, i_hmin_salt_ex respectively:
-!   0: not turned off locally;
-!   1: locally turned off, based on grid depth, i.e.,
-!      off when the local grid depth (z in hgrid) < hmin_airsea_ex or hmin_salt_ex;
-!   2 (recommended): locally turned off, based on local total water depth, i.e.,
-!      off when the local total water depth < hmin_airsea_ex or hmin_salt_ex,
-! hmin_airsea_ex, hmin_salt_ex:
-!   0.2 m is recommended for both "1" and "2"
+! To enable salt exchange, recompile with precip/evap module turned on and
+! in this case, ihconsv must =1; ihconsv=1 needs nws=2,4.
+! i_hmin_airsea_ex, i_hmin_salt_ex: on/off flag for shallow treatment (if total depth <hmin_airsea_ex etc)
 !-----------------------------------------------------------------------
   ihconsv = 0 !heat exchange option
-  isconsv = 0 !evaporation/precipitation model
-  i_hmin_airsea_ex = 2 ! no effect if ihconsv=0 
+!  isconsv = 0 !evaporation/precipitation model
+  i_hmin_airsea_ex = 1 ! no effect if ihconsv=0 
   hmin_airsea_ex = 0.2 ![m], no effect if ihconsv=0 
-  i_hmin_salt_ex = 2 ! no effect if isconsv=0 
-  hmin_salt_ex = 0.2 ![m], no effect if isconsv=0 
+  i_hmin_salt_ex = 1 ! no effect if PREC_EVAP is off
+  hmin_salt_ex = 0.2 ![m], no effect if PREC_EVAP is off
   iprecip_off_bnd = 0 !if /=0, precip will be turned off near land bnd
-  !watertype_* below are used for water type '8'
-  watertype_rr = 0.58
-  watertype_d1 = 0.35 
-  watertype_d2 = 23.
+  !watertype_* below are used for water type '8' in watertype.gr3
+  watertype_rr = 0.58 ![-]
+  watertype_d1 = 0.35 ![m]
+  watertype_d2 = 23. ![m]
 
 !-----------------------------------------------------------------------
-! Option to add a sediment layer for the buffer effect on temperature
-! stemp_stc=0 would turn off this effect.
+! Option to add a sediment layer for the buffer effect on temperature.
+! istemp=0 would turn off this effect; otherwise, needs soil_conductivity.gr3
+! which specifies the soil thermal conductivity in W/m^2/K, and soil_thick.gr3 (in meters).
+! The conductivity is on the order of 5, but can be 0 in deep depths to turn off 
+! the effect
 !-----------------------------------------------------------------------
-  stemp_stc  = 0.0   !heat transfer coefficient W.m-2.K-1
-  stemp_dz(1)= 1.0   !equivalent sediment buffer depth (m) for heat into sediment
-  stemp_dz(2)= 1.0   !equivalent sediment buffer depth (m) for heat out of sediment
+  istemp = 0   !on/off
+  relax_2_airt = 0.05  ![0,1] relaxation to air T at shallow wet area
 
 !-----------------------------------------------------------------------
 ! Turbulence closure.
@@ -614,6 +569,11 @@
   mid = 'KL' !needed if itur=3,5. Use KE if itur=5 
   stab = 'KC' !needed if itur=3 or 5. Use 'GA' if turb_met='MY'; otherwise use 'KC'. 
   xlsc0 = 0.1 !needed if itur=3 or 5. Scale for surface & bottom mixing length (>0)
+  icompute_cpsi3 = 0 !needed if itur=3,5; optional to compute c_psi3
+  !2nd-order stability function coefficient options (options 1 to 7); needed if icompute_cpsi3/=0
+  !5: Canuto A; 6: Canuto B (see misc_subs.F90 for other options)
+  iscnd_coeff = 5 
+  ri_st = 0.25 !needed if icompute_cpsi3/=0. Try [0.1,0.25]
 
 !-----------------------------------------------------------------------
 ! Sponge layer for elevation and vel.
@@ -703,26 +663,6 @@
   iflux = 0
 
 !-----------------------------------------------------------------------
-! Test flags for debugging. These flags should be turned off normally.
-!-----------------------------------------------------------------------
-! Williamson test #5 (zonal flow over an isolated mount); if
-! on, ics must =2
-!-----------------------------------------------------------------------
-  izonal5 = 0 !"0" - no test; otherwise on
-
-!-----------------------------------------------------------------------
-! Rotating Gausshill test with stratified T,S (1: on; 0: off)
-! Surface T,S read in from *.ic; code generates stratification
-!-----------------------------------------------------------------------
-  ibtrack_test = 0
-
-!-----------------------------------------------------------------------
-! Rouse profile test (1: on; 0: off)
-! If on, must turn on USE_TIMOR
-!-----------------------------------------------------------------------
-  irouse_test = 0
-
-!-----------------------------------------------------------------------
 ! Flag to choose FIB model for bacteria decay (used with USE_FIB)
 ! flag_fib = 1 - Constant decay rate (/day) in .gr3 format
 !                (kkfib_1.gr3 and kkfib_2.gr3)
@@ -732,22 +672,32 @@
   flag_fib = 1
 
 !----------------------------------------------------------------------
-! Marsh model parameters (only if USE_MARSH is on)
+! Marsh model parameters (only if USE_MARSH is on, and in this case
+! iveg must /=0)
 !----------------------------------------------------------------------
   slr_rate = 120. !sea-level rise rate in mm/yr, times morphological acceleration if used
+  veg_di0 = 0.1,0.1 !(1:nmarsh_types) [m]; diamters for each marsh type
+  veg_h0 = 0.1,0.1 ![m] heights for each marsh type
+  veg_nv0 = 0.1,0.1 ![m^-2] density for each marsh type
+  veg_cd0 = 1.,1. ![-] form drag coefficients for each marsh type
+  drown_marsh = 0.5,0. ![m] depth at which marsh will be drowned
+  !min/max bottom elev (including SLR) interval favorable for marsh creation/migration
+  create_marsh_min = -1. ![m]
+  create_marsh_max = 0. ![m] 
+  age_marsh_min = 1. ![days] min marsh age threshold of surrounding cells to allow migration.
+                     !Needs to account for morph acceleration
 
 !----------------------------------------------------------------------
 ! Vegetation model
 ! If iveg/=0, need 4 extra inputs: (1) veg_D.gr3 (depth is stem diameter in meters);
 ! (2) veg_N.gr3 (depth is # of stems per m^2);
 ! (3) veg_h.gr3 (height of canopy in meters);
-! (4) veg_cd.gr3 (drag coefficient).
-! With iveg=1, the vertical scaling is given by veg_vert_scale_[cd,N,D](1:nbins_veg_vert+1) below.
+! (4) veg_cd.gr3 (form drag coefficient).
+! If one of these depths=0 at a node, the code will set all to 0. 
+
+! With iveg/=0, the vertical scaling is given by veg_vert_scale_[cd,N,D](1:nbins_veg_vert+1) below.
 ! veg_vert_z(:) specify the distance from bed for each bin (ascending order starting from 0).
 ! iveg=2: flex vegeation using Ganthy (2011) fomulation
-
-! If one of these depths=0 at a node, the code will set all to 0. 
-! If USE_MARSH is on and iveg=1, all .gr3 must have constant depths!
 !----------------------------------------------------------------------
   iveg = 0 !on/off flag
   veg_vert_z = 0.,0.5,1. ![m] starting from 0.; used if iveg=1
@@ -782,6 +732,58 @@
 ! Reference water density for Boussinesq approximation
 !-----------------------------------------------------------------------
   rho0 = 1000.d0 !kg/m^3
+
+!+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+! Advanced options (for developers mostly)
+!+++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+!-----------------------------------------------------------------------
+! Option to deal with under resolution near steep slopes in deeper depths
+! 0: use h[12],_bcc below; /=0: use hw_* below
+!-----------------------------------------------------------------------
+  iunder_deep = 0 
+
+!-----------------------------------------------------------------------
+! Baroclinicity calculation in off/nearshore with iunder_deep=ibc=0. 
+! The 'below-bottom' gradient
+! is zeroed out if h>=h2_bcc (i.e. like Z) or uses const extrap
+! (i.e. like terrain-following) if h<=h1_bcc(<h2_bcc) (and linear
+! transition in between based on local depth)
+!-----------------------------------------------------------------------
+  h1_bcc = 50. ![m]
+  h2_bcc = 100. ![m]; >h1_bcc
+
+!-----------------------------------------------------------------------
+! Hannah-Wright-like ratio & depth used to account for under-resolution
+! in a b-clinic model. Used only if ibc=0 and iunder_deep/=0.
+! The b-clinic force at prism centers is calculated with a reconstruction
+! method in horizontal that has a stencil of an element and its adjacent elements.
+! If the depths change is too much between the elem and its adjacent elem
+! the under-resolution occurs (with steep bottom slope) and b-clinic force
+! needs to be zeroed out below the (higher) bottom, specifically, if
+! max(2 depths)>=hw_depth and abs(diff(2 depths))>=hw_ratio*max(2 depths).
+!-----------------------------------------------------------------------
+  hw_depth = 1.e6 !threshold depth in [m]
+  hw_ratio = 0.5 !ratio
+
+!-----------------------------------------------------------------------
+! Test flags for debugging. These flags should be turned off normally.
+!-----------------------------------------------------------------------
+! Williamson test #5 (zonal flow over an isolated mount); if
+! on, ics must =2
+!-----------------------------------------------------------------------
+  izonal5 = 0 !"0" - no test; otherwise on
+
+!-----------------------------------------------------------------------
+! Rotating Gausshill test with stratified T,S (1: on; 0: off)
+! Surface T,S read in from *.ic; code generates stratification
+!-----------------------------------------------------------------------
+  ibtrack_test = 0
+
+!-----------------------------------------------------------------------
+! Rouse profile test (1: on; 0: off)
+! If on, must turn on USE_TIMOR
+!-----------------------------------------------------------------------
+  irouse_test = 0
 
 !-----------------------------------------------------------------------
 ! Fraction of vertical flux closure adjustment applied at surface, then subtracted
@@ -846,7 +848,7 @@
 ! a station.in. If ics=2, the cordinates in station.in must be in lon., lat,
 ! and z (positive upward; not used for 2D variables). 
 !-----------------------------------------------------------------------
-  iout_sta = 0
+  iout_sta = 0 !1: no 3D profile output; 2: with 3D profile output in staout_[5-]
   nspool_sta = 10 !needed if iout_sta/=0; mod(nhot_write,nspool_sta) must=0
 
 !-----------------------------------------------------------------------
@@ -884,6 +886,7 @@
   iof_hydro(29) = 0 !T @prism centers [C] {temperatureAtElement} 3D
   iof_hydro(30) = 0 !S @prism centers [PSU] {salinityAtElement} 3D
   iof_hydro(31) = 0 !Barotropic pressure gradient force vector (m.s-2) @side centers  {pressure_gradient} 2D vector
+  iof_hydro(32) = 0 !sediment termperature @elem [C] {sedTemperature} 2D 
 
 !-----------------------------------------------------------------------
 ! Outputs from optional modules. Only uncomment these if the USE_* is on

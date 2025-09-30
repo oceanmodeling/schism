@@ -1,9 +1,6 @@
 
 ############# CMake versioning and backward compatibility #####
 cmake_minimum_required (VERSION 3.12)
-if(POLICY CMP0017)
-  cmake_policy(SET CMP0017 OLD)
-endif(POLICY CMP0017)
 set(CMAKE_DISABLE_SOURCE_CHANGES ON)
 set(CMAKE_DISABLE_IN_SOURCE_BUILD ON)
 
@@ -54,6 +51,9 @@ add_compile_options(${C_PREPROCESS_FLAG})
 
 message(STATUS "\n### Processing algorithmic switches and build options involving functionality for main project")
 
+# Defined early in the list to allow use as a default for others
+define_opt(USE_BMI "Build a library that can be used from BMI, with sources and some b.c. provided by BMI" OFF)
+
 define_opt(NO_PARMETIS "Disable ParMETIS" OFF)
 define_opt(DEBUG "Enable diagnostics (slow and not suitable for production simulations" OFF)
 define_opt(USE_ANALYSIS "Triggers detailed calculations and output options" OFF)
@@ -61,7 +61,6 @@ define_opt(INCLUDE_TIMING "Add timing profile instrumentation to simulation" OFF
 define_opt(TIMER2 "Print timing information" OFF)
 define_opt(OLDIO "Old nc output option" OFF)
 define_opt(USE_ATMOS "Atmospheric model output option" OFF)
-define_opt(USE_NWM_BMI "Use NWM BMI for source and some b.c." OFF)
 define_opt(PREC_EVAP "Use  precipitation/evaporation option" OFF)
 define_opt(IMPOSE_NET_FLUX "Specify net heat and salt fluxes in sflux" OFF)
 define_opt(USE_BULK_FAIRALL "Enable Fairall scheme" OFF)
@@ -78,6 +77,7 @@ define_opt(USE_DVD "Enable DVD module" OFF)
 define_opt(BLD_STANDALONE "Standalone build mode" ON)
 define_opt(SH_MEM_COMM "Shared mem communicator" OFF)
 define_opt(BUILD_TOOLS "Build pschism and all the utilities" ON)
+define_opt(BUILD_SHARED_LIBS "Build SCHISM shared libraries" OFF)
 
 if(NOT DEFINED TVD_LIM)
   message(WARNING "TVD_LIM must be provided, either in the cache. It must be one of SB, VL, MM or OS for Superbee, Van Leer, Minmod, or Osher. Default is VL")
@@ -338,19 +338,25 @@ string(REPLACE _HYDRO_SCHISM "" mod_tag_rev ${mod_tag_rev})
 # call cmake with -DUSE_GOTM=ON -DGOTM_BASE=[gotm code directory]
 #
 if(USE_GOTM)
-find_path(GOTM_BASE src/gotm/gotm.F90 $GOTM_BASE ${CMAKE_CURRENT_SOURCE_DIR}/GOTM5.2/code DOC "GOTM source directory")
-if(GOTM_BASE)
-  message(STATUS "using GOTM_BASE ${GOTM_BASE}")
-  set(GOTM_BUILD_LIBRARIES_ONLY ON)
-  set(GOTM_USE_FABM OFF CACHE BOOL "use GOTM without FABM")
-  set(GOTM_USE_FLEXIBLE_OUTPUT OFF CACHE BOOL "use GOTM without flexible output")
-  add_subdirectory(${GOTM_BASE}/src gotm)
-  set(GOTM_INCLUDE_DIRS ${CMAKE_BINARY_DIR}/gotm/modules)
-  set(GOTM_LIBRARIES turbulence util)
-  add_dependencies(hydro ${GOTM_LIBRARIES})
-  set(GOTMLIBS ${GOTM_LIBRARIES} )
-  set_property(TARGET hydro APPEND PROPERTY INCLUDE_DIRECTORIES "${GOTM_INCLUDE_DIRS}")
-endif(GOTM_BASE)
+  find_path(GOTM_BASE src/gotm/gotm.F90 $GOTM_BASE 
+    ${CMAKE_CURRENT_SOURCE_DIR}/GOTM5.2/code DOC "GOTM source directory"
+  )
+  if(GOTM_BASE)
+    message(STATUS "using GOTM_BASE ${GOTM_BASE}")
+    set(GOTM_BUILD_LIBRARIES_ONLY ON)
+    set(GOTM_USE_FABM OFF CACHE BOOL "use GOTM without FABM")
+    set(GOTM_USE_FLEXIBLE_OUTPUT OFF CACHE BOOL "use GOTM without flexible output")
+    if(EXISTS "${GOTM_BASE}/CMakeLists.txt")
+      add_subdirectory(${GOTM_BASE} gotm)
+    else()
+      add_subdirectory(${GOTM_BASE}/src gotm)
+    endif()
+    set(GOTM_INCLUDE_DIRS ${CMAKE_BINARY_DIR}/gotm/modules)
+    set(GOTM_LIBRARIES turbulence util)
+    add_dependencies(hydro ${GOTM_LIBRARIES})
+    set(GOTMLIBS ${GOTM_LIBRARIES} )
+    set_property(TARGET hydro APPEND PROPERTY INCLUDE_DIRECTORIES "${GOTM_INCLUDE_DIRS}")
+  endif(GOTM_BASE)
 endif(USE_GOTM)
 
 ########  Main executable #######
@@ -367,6 +373,11 @@ if (BLD_STANDALONE OR BUILD_TOOLS)
   add_subdirectory( Driver )
   set_property( DIRECTORY "Driver" APPEND PROPERTY COMPILE_DEFINITIONS ${all_define_options} ${all_use_mod_defs})
 endif()
+
+######## BMI Implementation Module #######
+if (USE_BMI)
+  add_subdirectory(BMI)
+endif(USE_BMI)
 
 ######## Utilities ########
 if (BLD_STANDALONE OR BUILD_TOOLS)
