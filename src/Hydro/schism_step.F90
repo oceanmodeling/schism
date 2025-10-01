@@ -5870,6 +5870,7 @@ real (rkind) :: aux                               ! ustar
           ie=indel(j,i)
           id=iself(j,i)
 
+          !Impossible for a node surrounded by all active blocks, so matrix is well conditioned
           if(ihydraulics/=0.and.nhtblocks>0) then
             if(isblock_el(ie)>0) cycle !active block
           endif
@@ -7290,8 +7291,10 @@ real (rkind) :: aux                               ! ustar
         enddo !l=kbe(i),nvrt-1
 
         !Optionally correct w and vertical flux according to the flux across free surface for T,S only
-        if(vclose_surf_frac.ge.0.0d0.and.vclose_surf_frac.lt.1.0d0) then 
-          surface_flux_ratio = 1.d0-vclose_surf_frac 
+!        if(vclose_surf_frac(i)>=0.0d0.and.vclose_surf_frac(i)<1.0d0) then 
+        !vclose_surf_frac(:) \in [0,1] checked
+        if(abs(vclose_surf_frac(i)-1.0d0)>1.d-4) then 
+          surface_flux_ratio = 1.d0-vclose_surf_frac(i)
           wflux_correct = 0.d0
           l=nvrt
           ubar=0.d0
@@ -7881,7 +7884,7 @@ real (rkind) :: aux                               ! ustar
         endif !if_source
 
 !       Heat exchange between sediment and bottom water
-        if(istemp/=0) then
+        if(istemp/=0) then !ihconsv/=0
 !$OMP     do
           do i=1,nea
             tmp=sum(stemp_dz(elnode(1:i34(i),i)))/i34(i) !SED thickness>0
@@ -7916,7 +7919,7 @@ real (rkind) :: aux                               ! ustar
         endif !istemp
 
         !Relax shallow wet T to air T
-        if(i_hmin_airsea_ex/=0) then
+        if(ihconsv/=0.and.i_hmin_airsea_ex/=0) then
 !$OMP     do
           do i=1,nea
             if(idry_e(i)==1) cycle
@@ -10303,9 +10306,9 @@ real (rkind) :: aux                               ! ustar
                 sta_out(i,j)=sum(arco_sta(i,1:i34(ie))*swild2(1,1:i34(ie)))
               else !3D var.
                 if(idry_e(ie)==1) then !dry
-                  sta_out(i,j)=-999.d0
-                  sta_out3d(:,i,j)=-999.d0
-                  zta_out3d(:,i,j)=-999.d0
+                  sta_out(i,j)=-1.d7 !-999.d0
+                  sta_out3d(:,i,j)=-1.d7 !-999.d0
+                  zta_out3d(:,i,j)=-1.d7 !-999.d0
                 else !wet
                   do m=1,i34(ie) !wet nodes
                     nd=elnode(m,ie)
@@ -10335,19 +10338,27 @@ real (rkind) :: aux                               ! ustar
                   sta_out(i,j)=sum(arco_sta(i,1:i34(ie))*swild(1:i34(ie)))
 
                   !Vertical profiles
+                  itmp=minval(kbp(elnode(1:i34(ie),ie)))
                   do k=1,nvrt
-                    do m=1,i34(ie)
-                      nd=elnode(m,ie)
-                      if(k<kbp(nd)) then
-                        swild4(1,m)=-9999.d0 !zcor
-                        swild4(2,m)=-9999.d0 !var
-                      else
-                        swild4(1,m)=znl(k,nd)
-                        swild4(2,m)=swild2(k,m)
-                      endif
-                    enddo !m
-                    zta_out3d(k,i,j)=sum(arco_sta(i,1:i34(ie))*swild4(1,1:i34(ie)))
-                    sta_out3d(k,i,j)=sum(arco_sta(i,1:i34(ie))*swild4(2,1:i34(ie)))
+                    if(k<itmp) then
+                      zta_out3d(k,i,j)=-1.d7
+                      sta_out3d(k,i,j)=-1.d7
+                    else !at least 1 node has valid value
+                      do m=1,i34(ie)
+                        nd=elnode(m,ie)
+                        swild4(1,m)=znl(max(k,kbp(nd)),nd) !zcor
+                        swild4(2,m)=swild2(max(k,kbp(nd)),m) !var
+!                        if(k<kbp(nd)) then
+!                          swild4(1,m)=-1.d7 !-9999.d0 !zcor
+!                          swild4(2,m)=-1.d7 !-9999.d0 !var
+!                        else
+!                          swild4(1,m)=znl(k,nd)
+!                          swild4(2,m)=swild2(k,m)
+!                        endif
+                      enddo !m
+                      zta_out3d(k,i,j)=sum(arco_sta(i,1:i34(ie))*swild4(1,1:i34(ie)))
+                      sta_out3d(k,i,j)=sum(arco_sta(i,1:i34(ie))*swild4(2,1:i34(ie)))
+                    endif !k
                   enddo !k
                 endif !idry_e
               endif !j
@@ -10368,11 +10379,11 @@ real (rkind) :: aux                               ! ustar
           do i=1,nvar_sta
             if(iof_sta(i)==0.or.mod(it,nspool_sta)/=0) cycle
             do j=1,nout_sta
-              if(nwild2(j)==0) then
-                sta_out_gb(j,i)=-9999.d0
+              if(nwild2(j)==0) then !outside domain
+                sta_out_gb(j,i)=1.d7 !-9999.d0
                 if(i>4) then !3D only
-                  sta_out3d_gb(:,j,i)=-9999.d0
-                  zta_out3d_gb(:,j,i)=-9999.d0
+                  sta_out3d_gb(:,j,i)=1.d7 !-9999.d0
+                  zta_out3d_gb(:,j,i)=1.d7 !-9999.d0
                 endif
               else
                 sta_out_gb(j,i)=sta_out_gb(j,i)/dble(nwild2(j))
