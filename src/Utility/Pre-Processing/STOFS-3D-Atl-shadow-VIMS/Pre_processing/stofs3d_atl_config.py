@@ -21,7 +21,7 @@ class ConfigStofs3dAtlantic():
         self,
         startdate=datetime(2017, 12, 1),  # start date of the model
         rnday=60,  # number of days to run the model
-        ocean_bnd_ids=[0],  # list of open boundary ids for *D.th.nc
+        ocean_bnd_ids=[0,1],  # list of open boundary ids for *D.th.nc
         elev2d_uniform_shift=0.0,  # add a uniform shift to elev2D
         nudging_zone_width=1.5,  # in degrees
         nudging_day=1.0,  # in days
@@ -36,6 +36,9 @@ class ConfigStofs3dAtlantic():
                                 # made by make_feeder_channel.py in RiverMapper
         hgrid_without_feeders=None,
         mandatory_sources_coor=None,  # a dictionary of mandatory sources' coordinates
+        existing_source_json_path=None,  # path to an existing sources.json and sinks.json to be reused
+        reuse_source_json=False,  # whether to reuse existing sources.json and sinks.json when relocating sources
+        replace_nwm_with_usgs=False,  # whether to replace NWM streamflow with USGS gage data if available
         gr3_values=None,
         tvd_regions=None
     ):
@@ -53,6 +56,9 @@ class ConfigStofs3dAtlantic():
         self.feeder_info_file = feeder_info_file
         self.hgrid_without_feeders = hgrid_without_feeders
         self.mandatory_sources_coor = mandatory_sources_coor
+        self.existing_source_json_path = existing_source_json_path
+        self.reuse_source_json = reuse_source_json
+        self.replace_nwm_with_usgs = replace_nwm_with_usgs
 
         if bc_flags is None:
             self.bc_flags = [
@@ -200,7 +206,7 @@ class ConfigStofs3dAtlantic():
             ),
             hgrid_without_feeders=None,
             mandatory_sources_coor=rsf.v45_s2_mandatory_sources_coor,
-            relocate_source=True,
+            relocate_source=False,
             nwm_cache_folder=None,
             bc_flags=[[5, 3, 0, 0]],
             bc_relax=[[None, None, None, None]],
@@ -335,6 +341,7 @@ class ConfigStofs3dAtlantic():
     def v8_Hercules(cls):
         '''Factory method to create a configuration for STOFS3D-v8 3D setup'''
         return cls(
+            ocean_bnd_ids=[0, 1],
             elev2d_uniform_shift=-0.42,  # add a uniform shift to elev2D
             nudging_zone_width=7.3,  # default nudging zone
             shapiro_zone_width=11.5,  # default shapiro zone
