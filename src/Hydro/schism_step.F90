@@ -697,6 +697,14 @@ real (rkind) :: aux                               ! ustar
 !$OMP end parallel do
 #endif /*not USE_ATMOS*/
 
+#ifdef USE_CICE
+        do i=1,npa
+          fluxprc_ocn(i) = fluxprc(i)
+          fluxevp_ocn(i) = fluxevp(i)
+          sflux_ocn(i)   = sflux(i)
+          srad_ocn(i)    = srad(i)
+        enddo
+#endif /*USE_CICE*/
       endif !nws=4
 
 #ifdef USE_SIMPLE_WIND
@@ -1001,71 +1009,100 @@ real (rkind) :: aux                               ! ustar
 !$OMP end parallel
 
 !$OMP   do
-#ifdef USE_CICE
 
+
+#ifdef USE_CICE
   !>--------------------------------------------------------
   !>              Imported values from CICE
-  !> CICE-UFS coupling importing variables (Using MICE vars)
+  !>         CICE-UFS coupling importing variables
+  !>--------------------------------------------------------
+  
+  !>--------------------------------------------------------
+  !>  Boundary points zeroing out fluxes that might effect
   !>--------------------------------------------------------
 
+  do i = 1,np
+      if((isbnd(1,i)>0))  then
+        tau_oi(1,i) = real(0)
+        tau_oi(2,i) = real(0)
+        fresh_wa_flux(i)=real(0)
+        salinity_flux(i)= real(0)
+      endif
+  enddo 
+
+  !>--------------------------------------------------------
+  !> updating ghost region for incoming variables from CICE
+  !>--------------------------------------------------------
+ 
+  call exchange_p2d(aice)
+  call exchange_p2d(CdnIO)
+  !call exchange_p2d(tau_oi)
+  call exchange_p2d(uvice)
+  call exchange_p2d(vvice)
+  call exchange_p2d(fresh_wa_flux)
+  call exchange_p2d(srad_th_ice)
+  call exchange_p2d(net_heat_flux)
+
+  swild(1:npa)=tau_oi(1,:)
+  call exchange_p2d(swild)
+  tau_oi(1,:)=swild(1:npa)
+  swild(1:npa)=tau_oi(2,:)
+  call exchange_p2d(swild)
+  tau_oi(2,:)=swild(1:npa)
+
   do i = 1,npa
-    if (aice(i) > real(0.0)) then
+    if (aice(i) > real(1e-8)) then
       !>-------------------------------------------------
-      !>Ice ocean stress
-      !>tau_oi is in units of [N/m/m] (1=x, 2=y)
+      !> Ice ocean stress
+      !> tau_oi is in units of [N/m/m] (1=x, 2=y)
       !>-------------------------------------------------
 
-        aux = sqrt((uvice(i)-uu2(nvrt,i))**2 + (vvice(i)-vv2(nvrt,i))**2 )*CdnIO(i)
-
-        tau_oi(1,i) = aux*(uvice(i) - uu2(nvrt,i)) 
-        tau_oi(2,i) = aux*(vvice(i) - vv2(nvrt,i))
-
-        tau(1,i)   = (1-aice(i))*tau(1,i) + aice(i)*tau_oi(1,i) 
-        tau(2,i)   = (1-aice(i))*tau(2,i) + aice(i)*tau_oi(2,i)
-
+        tau(1,i)   = (1-aice(i))*tau(1,i) + aice(i)*(tau_oi(1,i)/real(1025.0)) 
+        tau(2,i)   = (1-aice(i))*tau(2,i) + aice(i)*(tau_oi(2,i)/real(1025.0))
+     
       !>-------------------------------------------------
-      !>Fresh water flux 
+      !> Fresh water flux 
       !> fresh_wa_fluxs is in units of [kg/s/m/m]
+      !> Salinity flux is incoded as eq fresh water flux [kg/s/m/m]
       !>-------------------------------------------------
-
-        fluxprc(i) = (1-aice(i))*fluxprc(i) + aice(i)*fresh_wa_flux(i)!*real(0.5)
+        
+        fluxprc(i) = (1-aice(i))*fluxprc_ocn(i) + aice(i)*(fresh_wa_flux(i)+salinity_flux(i)) !*real(0.5)
+      
+      !>-------------------------------------------------
+      !> Scaling the evaporation flux to account for ice
+      !> This is done to keep consistent with fluxprcp
+      !>-------------------------------------------------
+       
+       fluxevp(i) = (1-aice(i))*fluxevp_ocn(i)      
 
       !>-------------------------------------------------
-      !>Heat flux ice to ocean 
+      !>Heat flux ice to ocean  (multiplied by aice)
       !> net_heat_flux is in units of [W/m/m]
       !>-------------------------------------------------
 
-        sflux(i)   =  (1-aice(i))*sflux(i) + aice(i)*net_heat_flux(i)
+        sflux(i)   =  (1-aice(i))*sflux_ocn(i)  + aice(i)*net_heat_flux(i)
 
       !>-------------------------------------------------
-      !>Short-wave pen. flux
+      !>Short-wave pen. flux 
       !>srad_th_ice is in units of [W/m/m]
       !>------------------------------------------------
          
-         srad(i)   =   (1-aice(i))*srad_o(i) + aice(i)*srad_th_ice(i)
- 
-    end if
+         srad(i)   =   (1-aice(i))*srad_ocn(i) + aice(i)*srad_th_ice(i)
+
+        if(idry(i)==1) then
+          fluxprc(i)=0;
+          sflux(i)=0;
+          fluxevp(i)=0;
+          srad(i)=0;
+          tau(1,i)=0;
+          tau(2,i)=0;
+        endif
+     end if !aice
   end do
 !$OMP   end do
 
- do i=1,nea
-    do k=1,nvrt
-      tf = -0.0543*tr_el(2,k,i)
-      if(tr_el(1,k,i)<tf) tr_el(1,k,i)=tf         !reset temp. below freezing temp.  
-    enddo
- enddo
-
- do i=1,npa
-     do k=1,nvrt
-       tf = -0.0543*tr_nd(2,k,i)
-       if(tr_nd(1,k,i)<tf) tr_nd(1,k,i)=tf         !reset temp. below freezing temp.
-       tf = -0.0543*tr_nd0(2,k,i)
-       if(tr_nd0(1,k,i)<tf) tr_nd0(1,k,i)=tf         !reset temp. below freezing temp.
-     enddo
-  enddo
-
   !>--------------------------------------------------------
-  !>              Finished CICE import
+  !> end CICE import
   !>--------------------------------------------------------
 #endif /*USE_CICE*/
 
